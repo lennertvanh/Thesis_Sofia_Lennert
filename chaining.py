@@ -52,7 +52,7 @@ class Chain(BaseEstimator):
         for col, model in zip(self.y_columns, self.models):
             # Fit model on only observed target values
             i_nona = ~y[col].isna()
-            model.fit(Xext.loc[i_nona,:], y[col].loc[i_nona])
+            model.fit(Xext.loc[i_nona,:], y[col].loc[i_nona]) # Fit on fully annotated (target side) part
             # Propagate the predictions
             if self.propagate == "pred":
                 yi_pred = model.predict(Xext)
