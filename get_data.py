@@ -89,6 +89,7 @@ print("DM_agg.csv has been created in the folder new_data")
 file_name = 'ce.csv'
 file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
 clinical_events = pd.read_csv(file_path)
+clinical_events = clinical_events.sort_values(by=['USUBJID','CESEQ'], ascending=True)
 
 # Drop some initial columns
 missing_percentage_ce = (clinical_events.isnull().sum() / len(clinical_events)) * 100
@@ -136,6 +137,10 @@ def replace_words(row):
 
 clinical_events_aggregated['CESEV'] = clinical_events_aggregated['CESEV'].apply(replace_words)
 
+# Clean Treatment variable
+clinical_events_aggregated['CECONTRT'] = clinical_events_aggregated['CECONTRT'].replace('N; Y', 'Y')
+clinical_events_aggregated['CECONTRT'] = clinical_events_aggregated['CECONTRT'].replace('Y; N', 'Y')
+
 # Convert total relapses to numeric
 clinical_events_aggregated['TOTRELAP'] = pd.to_numeric(clinical_events_aggregated['TOTRELAP'], errors='coerce')
 
@@ -160,6 +165,8 @@ print("CE_agg.csv has been created in the folder new_data")
 file_name = 'sm.csv'
 file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
 milestones = pd.read_csv(file_path)
+milestones = milestones.sort_values(by=['USUBJID', 'SMSEQ'], ascending=True)
+
 
 # Drop some initial columns
 columns_to_drop = ['STUDYID','DOMAIN','SMSEQ','SMENRF','MIDSTYPE']
@@ -190,6 +197,7 @@ print("SM_agg.csv has been created in the folder new_data")
 ################################################
 ############### Medical History ################
 ################################################
+print("Warning: MH dataset might take some time to run")
 
 # Load data
 file_name = 'mh.csv'
@@ -348,6 +356,7 @@ ftests = ftests.drop(columns=columns_to_drop)
 
 # Remove redundant columns
 ftests = ftests.drop(columns=['STUDYID', 'DOMAIN', 'FTTESTCD', 'FTORRES', 'FTORRESU', 'FTSTRESU'])
+ftests.sort_values(by=['USUBJID', 'FTSEQ'], inplace=True)
 
 # Define the 'FTTEST' values with a numeric outcome
 num_FTTEST_values = [
@@ -505,6 +514,7 @@ opt = opt.drop(columns=columns_to_drop)
 
 # Remove redundant columns
 opt = opt.drop(columns=['STUDYID', 'DOMAIN', 'OETESTCD', 'OELOC', 'OECAT', 'OEORRES'])
+opt.sort_values(by=['USUBJID', 'OESEQ'], inplace=True)
 
 # SNELLEN EQUIVALENT SCORE #
 SES_df = opt[opt['OETEST'] == 'Snellen Equivalent Score'].copy()  # Create a copy to avoid the warning
@@ -600,8 +610,8 @@ result_SLEC = pd.merge(SLEC_rows[['USUBJID']], grouped_df, on='USUBJID', how='le
 result_SLEC = result_SLEC.drop_duplicates(subset=['USUBJID'])
 
 # Desired column order
-#desired_order = ['USUBJID', 'SLEC_before', 'SLEC_after']
-#result_SLEC = result_SLEC[desired_order]
+desired_order = ['USUBJID', 'SLEC_before', 'SLEC_after']
+result_SLEC = result_SLEC[desired_order]
 
 # VISUAL ACUITY ASSESSMENT #
 VAA_rows = opt[opt['OETEST'] == 'Visual Acuity Assessment']
@@ -662,6 +672,7 @@ qs = qs.drop(columns=columns_to_drop)
 
 # Remove redundant columns
 qs = qs.drop(columns=['STUDYID', 'DOMAIN', 'QSTESTCD'])
+qs.sort_values(by=['USUBJID', 'QSSEQ'], inplace=True)
 
 # BDI II #
 BDI_rows = qs[qs['QSCAT'] == 'BDI-II']
@@ -1066,3 +1077,68 @@ questionnaires_aggregated.to_csv(csv_file_path, index=False)
 
 # Print message after CSV file creation
 print("QS_agg.csv has been created in the folder new_data")
+
+
+
+###############################################
+################# Merge Data ##################
+###############################################
+
+# Define possible paths where CSV files might be located
+possible_paths = [
+    'C:/Users/lenne/OneDrive/Documenten/Master of Statistics and Data Science/2023-2024/Master thesis/Thesis_Sofia_Lennert/new_data',
+    'C:/Users/anaso/Desktop/SOFIA MENDES/KU Leuven/Master Thesis/Thesis_Sofia_Lennert/new_data'
+]
+
+# Define file names
+file1 = 'DM_agg.csv'
+file2 = 'CE_agg.csv'
+file3 = 'MH_agg.csv'
+file4 = 'SM_agg.csv'
+file5 = 'FT_agg.csv'
+file6 = 'OE_agg.csv'
+file7 = 'QS_agg.csv'
+
+# Find full paths to the CSV files
+path1 = next((f'{path}/{file1}' for path in possible_paths if os.path.exists(f'{path}/{file1}')), None)
+path2 = next((f'{path}/{file2}' for path in possible_paths if os.path.exists(f'{path}/{file2}')), None)
+path3 = next((f'{path}/{file3}' for path in possible_paths if os.path.exists(f'{path}/{file3}')), None)
+path4 = next((f'{path}/{file4}' for path in possible_paths if os.path.exists(f'{path}/{file4}')), None)
+path5 = next((f'{path}/{file5}' for path in possible_paths if os.path.exists(f'{path}/{file5}')), None)
+path6 = next((f'{path}/{file6}' for path in possible_paths if os.path.exists(f'{path}/{file6}')), None)
+path7 = next((f'{path}/{file7}' for path in possible_paths if os.path.exists(f'{path}/{file7}')), None)
+
+# Check if paths are found
+if None in [path1, path2, path3, path4, path5, path6, path7]: 
+    print("Some files were not found. Please check the paths and filenames.")
+else:
+    # Read CSV files into DataFrames
+    dataset1 = pd.read_csv(path1)
+    dataset2 = pd.read_csv(path2)
+    dataset3 = pd.read_csv(path3)
+    dataset4 = pd.read_csv(path4)
+    dataset5 = pd.read_csv(path5)
+    dataset6 = pd.read_csv(path6)
+    dataset7 = pd.read_csv(path7)
+
+    # Merge the datasets
+    merged_df = pd.merge(dataset1, dataset2, on='USUBJID', how='outer')
+    merged_df = pd.merge(merged_df, dataset3, on='USUBJID', how='outer')
+    merged_df = pd.merge(merged_df, dataset4, on='USUBJID', how='outer')
+    merged_df = pd.merge(merged_df, dataset5, on='USUBJID', how='outer')
+    merged_df = pd.merge(merged_df, dataset6, on='USUBJID', how='outer')
+    merged_df = pd.merge(merged_df, dataset7, on='USUBJID', how='outer')
+
+
+folder_name = 'new_data'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# Specify the path for the CSV file
+csv_file_path = os.path.join(folder_name, 'merged_data.csv')
+
+# Save the DataFrame to CSV
+merged_df.to_csv(csv_file_path, index=False)
+
+
+print("Complete: Unified static dataframe has been obtained")
