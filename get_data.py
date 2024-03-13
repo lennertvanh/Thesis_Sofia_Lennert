@@ -574,7 +574,7 @@ result_DC = result_DC.drop(['DS_Left', 'DS_Right'], axis=1)
 
 # SLOAN LETTER EYE CHART #
 SLEC_rows = opt[(opt['OETEST'] == 'Number of Letters Correct') & (opt['OEMETHOD'] == 'SLOAN LETTER EYE CHART 1.25%')].copy()
-SLEC_rows = SLEC_rows[SLEC_rows['OELAT'] == 'B']
+SLEC_rows = SLEC_rows[SLEC_rows['OELAT'] == 'BILATERAL']
 
 conditions = [
     (SLEC_rows['OEDY'] <= 1),
@@ -639,3 +639,430 @@ print("OE_agg.csv has been created in the folder new_data")
 
 
 
+################################################
+################ Questionnaires ################
+################################################
+
+# Load data
+file_name = 'qs.csv'
+file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
+qs = pd.read_csv(file_path)
+
+missing_percentage_qs = (qs.isnull().sum() / len(qs)) * 100
+missing_qs = pd.DataFrame({'Column Name': missing_percentage_qs.index, 'Missing Percentage': missing_percentage_qs.values})
+
+# Set the threshold for missing percentage
+threshold = 80
+
+# Filter columns based on missing percentage
+columns_to_drop = missing_qs[missing_qs['Missing Percentage'] >= threshold]['Column Name']
+
+# Drop columns from the DataFrame
+qs = qs.drop(columns=columns_to_drop)
+
+# Remove redundant columns
+qs = qs.drop(columns=['STUDYID', 'DOMAIN', 'QSTESTCD'])
+
+# BDI II #
+BDI_rows = qs[qs['QSCAT'] == 'BDI-II']
+BDI_rows = BDI_rows.copy()
+BDI_rows.drop_duplicates(subset=['USUBJID', 'QSDY', 'QSTEST', 'QSSTRESN'], inplace=True)
+
+# Convert QSSTRESN column to numeric in case it's not already
+BDI_rows['QSSTRESN'] = pd.to_numeric(BDI_rows['QSSTRESN'], errors='coerce')
+
+# Find the index of the maximum QSSTRESN within each group
+max_idx = BDI_rows.groupby(['USUBJID', 'QSDY', 'QSTEST'])['QSSTRESN'].idxmax()
+
+# Filter the DataFrame using the identified indices
+BDI_rows = BDI_rows.loc[max_idx]
+
+result_table = BDI_rows.groupby(['USUBJID', 'QSDY']).size().reset_index(name='Count')
+
+# Step 1: Filter BDI_rows based on QSTEST
+filtered_rows = BDI_rows[BDI_rows['QSTEST'] == 'BDI01-BDI Total Score'].copy()
+
+# Step 2: Merge with result_table to get the 'Count' for each unique combination of 'USUBJID' and 'QSDY'
+merged_df = pd.merge(filtered_rows, result_table[['USUBJID', 'QSDY', 'Count']], on=['USUBJID', 'QSDY'], how='left')
+
+# Step 3: Calculate the new value for QSSTRESN
+merged_df['QSSTRESN'] = merged_df['QSSTRESN'] / (3 * (merged_df['Count'] - 1))
+
+# Step 4: Drop the 'Count' column 
+merged_df.drop(columns=['Count'], inplace=True)
+
+# Step 5: Merge the modified rows back into the original DataFrame
+BDI_rows = pd.merge(BDI_rows, merged_df[['USUBJID', 'QSDY', 'QSSTRESN']], on=['USUBJID', 'QSDY'], how='left')
+
+columns_to_drop = ['QSSEQ', 'QSSCAT', 'QSORRES', 'QSSTRESC', 'VISITNUM', 'QSEVLINT', 'QSSTRESN_x']
+BDI_rows = BDI_rows[BDI_rows['QSTEST'] == 'BDI01-BDI Total Score'].drop(columns=columns_to_drop)
+BDI_rows.rename(columns={'QSSTRESN_y': 'QSSTRESN'}, inplace=True)
+BDI_rows = BDI_rows.sort_values(by='USUBJID')
+
+conditions = [
+    (BDI_rows['QSDY'] <= 1),
+    (BDI_rows['QSDY'] > 1) 
+]
+# Define corresponding values for each condition
+values = ['BDI-before', 'BDI-after']
+
+# Create the new column "FT_PERIOD"
+BDI_rows['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+BDI_rows = BDI_rows.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test 
+
+# Calculate the median of QSSTRESN for each 'QS_PERIOD' for each patient
+median_df = BDI_rows.groupby(['USUBJID', 'QS_PERIOD']).agg({
+    'QSSTRESN': 'median'
+}).reset_index()
+
+# Pivot the table
+pivot_df = median_df.pivot_table(index='USUBJID', columns=['QS_PERIOD'], values='QSSTRESN').reset_index()
+
+# Remove the name of the index and columns
+pivot_df.index.name = None
+pivot_df.columns.name = None
+
+# Reorganize columns
+desired_order = ['USUBJID', 'BDI-before', 'BDI-after']
+result_BDI = pivot_df[desired_order]
+
+# EDSS #
+EDSS_rows = qs[qs['QSCAT'] == 'EDSS']
+EDSS_df = EDSS_rows.copy()  # Create a copy to avoid the warning
+
+conditions = [
+    (EDSS_df['QSDY'] <= 1),
+    ((EDSS_df['QSDY'] > 1) & (EDSS_df['QSDY'] <= 730)), 
+    ((EDSS_df['QSDY'] > 730))
+]
+# Define corresponding values for each condition
+values = ['before', '2y', 'after_2y'] 
+
+# Create the new column "FT_PERIOD"
+EDSS_df['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+EDSS_df = EDSS_df.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test
+
+# median EDSS for each period
+grouped_df = EDSS_df.pivot_table(values='QSSTRESN', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+
+# Rename the columns 
+grouped_df.columns = ['USUBJID'] + [f"EDSS-{period}" for period in grouped_df.columns[1:]]
+
+# Merge the new DataFrame with the original DataFrame on 'USUBJID'
+result_EDSS = pd.merge(EDSS_df[['USUBJID']], grouped_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_EDSS = result_EDSS.drop_duplicates(subset=['USUBJID'])
+
+# Reorganize columns
+desired_order = ['USUBJID', 'EDSS-before', 'EDSS-2y', 'EDSS-after_2y']
+result_EDSS = result_EDSS[desired_order]
+
+# KFSS #
+KFSS_qs = qs[qs['QSCAT'] == 'KFSS']
+KFSS_qs = KFSS_qs.drop(columns=['QSSEQ','VISITNUM','VISIT'])
+KFSS_qs = KFSS_qs.dropna(subset=['QSSTRESN'])
+
+# Group data by patient ID and count total entries and missing values in column A
+missing_data = KFSS_qs.groupby('USUBJID', as_index=False)['QSDY'].agg(total_entries='count', missing_values=lambda x: x.isnull().sum())
+
+# Calculate percentage of missing values for each patient ID
+missing_data['percentage_missing'] = (missing_data['missing_values'] / missing_data['total_entries']) * 100
+
+usubjid_inf_percentage_missing = missing_data[missing_data['percentage_missing'] == np.inf]['USUBJID'].tolist()
+KFSS_qs = KFSS_qs[~KFSS_qs['USUBJID'].isin(usubjid_inf_percentage_missing)]
+KFSS_qs = KFSS_qs.drop(columns=['QSEVLINT'])
+
+#put as NA rows with values 9 or 99
+KFSS_qs['QSSTRESN'] = KFSS_qs['QSSTRESN'].replace([9, 99], pd.NA)
+
+KFSS_qs_1=KFSS_qs.copy()
+KFSS_qs_2=KFSS_qs.copy()
+
+filter_tuples = [('MSOAC/0281',	435.0), ('MSOAC/2231', 785.0), ('MSOAC/2698', 710.0), ('MSOAC/6547', 1.0),('MSOAC/6823',1.0)]
+filtered_df = KFSS_qs[KFSS_qs.apply(lambda row: (row['USUBJID'], row['QSDY']) in filter_tuples, axis=1)]
+
+KFSS_qs_1['QSSTRESN'] = KFSS_qs_1.groupby(['USUBJID', 'QSTEST', 'QSDY'])['QSSTRESN'].transform('mean')
+KFSS_qs_1.drop_duplicates(subset=['USUBJID', 'QSTEST', 'QSDY'	, 'QSSTRESN'], inplace=True)
+
+num_tests = KFSS_qs_1.copy()
+num_tests['COUNT'] = num_tests.groupby(['USUBJID', 'QSDY'])['USUBJID'].transform('count')
+num_tests=num_tests[['USUBJID','QSDY', 'COUNT']].drop_duplicates()
+
+def set_scoremax(row):
+    if row['QSTEST'] in ['KFSS1-Cerebellar Functions', 'KFSS1-Brain Stem Functions', 'KFSS1-Cerebral or Mental Functions']:
+        return 5
+    #elif row['QSTEST'] in ['KFSS1-Other Functions']:
+        #return 1
+    else:
+        return 6
+
+# Apply the function row-wise to set the values in column B
+KFSS_qs_1['SCOREMAX'] = KFSS_qs_1.apply(set_scoremax, axis=1)
+KFSS_qs_1['QSPERC'] = KFSS_qs_1['QSSTRESN'] / KFSS_qs_1['SCOREMAX'] 
+KFSS_qs_1 = KFSS_qs_1.drop(columns=['QSCAT', 'QSSCAT', 'QSORRES', 'QSSTRESC', 'QSSTRESN', 'SCOREMAX'])
+
+KFSS_qs_1 = KFSS_qs_1.copy()  # Create a copy to avoid the warning
+conditions = [
+    (KFSS_qs_1['QSDY'] <= 1),
+    ((KFSS_qs_1['QSDY'] > 1) & (KFSS_qs_1['QSDY'] <= 730)),
+    #((KFSS_qs['QSDY'] > 365) & (KFSS_qs['QSDY'] <= 730)),
+    ((KFSS_qs_1['QSDY'] > 730)) #& (KFSS_qs['QSDY'] <= 1095)),
+    #((KFSS_qs['QSDY'] > 1095) & (KFSS_qs['QSDY'] <= 1460)) 
+]
+# Define corresponding values for each condition
+values = ['before', '2y', 'after_2y'] # , '4y' - if i use this i have 93% missing in the time
+
+# Create the new column "FT_PERIOD"
+KFSS_qs_1['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+KFSS_qs_1 = KFSS_qs_1.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test
+
+categories = ['KFSS1-Sensory Functions',
+              'KFSS1-Brain Stem Functions',
+              'KFSS1-Bowel and Bladder Functions',
+              'KFSS1-Pyramidal Functions',
+              'KFSS1-Cerebral or Mental Functions',
+              'KFSS1-Visual or Optic Functions',
+              'KFSS1-Cerebellar Functions']
+
+results = {}
+
+# Loop through each category
+for category in categories:
+    # Filtering based on the category
+    category_df = KFSS_qs_1[KFSS_qs_1['QSTEST'] == category]
+    
+    # Pivot table for the category
+    grouped_category_df = category_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+    category_name = category.split(' ')[0]
+    grouped_category_df.columns = ['USUBJID'] + [f"{category_name.replace(' ', '_')}-{period}" for period in grouped_category_df.columns[1:]]
+    
+    # Store the result in the dictionary
+    results[category] = grouped_category_df
+
+# Merge all results on 'USUBJID'
+result_KFSS_1 = results[categories[0]]  # Start with the first category
+for category in categories[1:]:
+    result_KFSS_1 = result_KFSS_1.merge(results[category], on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_KFSS_1 = result_KFSS_1.drop_duplicates(subset=['USUBJID'])
+
+def assign_value(row):
+    if row['QSTEST'] in ['KFSS1-Bowel and Bladder Functions', 'KFSS1-Visual or Optic Functions']: #'KFSS1-Other Functions', 
+        return 'PHYSICAL'
+    else:
+        return 'MENTAL'
+
+# Apply the function row-wise to assign values to column D
+KFSS_qs_2['QSSCAT'] = KFSS_qs_2.apply(assign_value, axis=1)
+
+def set_scoremax(row):
+    if row['QSTEST'] in ['KFSS1-Cerebellar Functions', 'KFSS1-Brain Stem Functions', 'KFSS1-Cerebral or Mental Functions']:
+        return 5
+    #elif row['QSTEST'] in ['KFSS1-Other Functions']:
+        #return 1
+    else:
+        return 6
+
+# Apply the function row-wise to set the values in column B
+KFSS_qs_2['SCOREMAX'] = KFSS_qs_2.apply(set_scoremax, axis=1)
+grouped_sum = KFSS_qs_2.groupby(['USUBJID', 'QSDY', 'QSSCAT']).agg({'QSSTRESN': 'sum', 'SCOREMAX': 'sum'}).reset_index()
+grouped_sum.rename(columns={'QSSTRESN': 'TOTALSCORE'}, inplace=True)
+grouped_sum.rename(columns={'SCOREMAX': 'TOTALMAXSCORE'}, inplace=True)
+grouped_sum['QSPERC'] = grouped_sum['TOTALSCORE'] / grouped_sum['TOTALMAXSCORE'] 
+KFSS_qs_2 = grouped_sum 
+KFSS_qs_2 = KFSS_qs_2.drop(columns=['TOTALSCORE','TOTALMAXSCORE'])
+
+KFSS_qs_2 = KFSS_qs_2.copy()  # Create a copy to avoid the warning
+conditions = [
+    (KFSS_qs_2['QSDY'] <= 1),
+    ((KFSS_qs_2['QSDY'] > 1) & (KFSS_qs_2['QSDY'] <= 730)),
+    #((KFSS_qs['QSDY'] > 365) & (KFSS_qs['QSDY'] <= 730)),
+    ((KFSS_qs_2['QSDY'] > 730)) #& (KFSS_qs['QSDY'] <= 1095)),
+    #((KFSS_qs['QSDY'] > 1095) & (KFSS_qs['QSDY'] <= 1460)) 
+]
+# Define corresponding values for each condition
+values = ['before', '2y', 'after_2y'] # , '4y' - if i use this i have 93% missing in the time
+
+# Create the new column "FT_PERIOD"
+KFSS_qs_2['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+KFSS_qs_2 = KFSS_qs_2.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test
+
+# Filtering based on the condition 'QSSCAT' == 'MENTAL'
+brain_df = KFSS_qs_2[KFSS_qs_2['QSSCAT'] == 'MENTAL']
+
+# Pivot table for 'BRAIN' category
+grouped_brain_df = brain_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_brain_df.columns = ['USUBJID'] + [f"KFSS_M-{period}" for period in grouped_brain_df.columns[1:]]
+
+# Filtering based on the condition 'QSSCAT' != 'BRAIN' (no need to check both cases)
+non_brain_df = KFSS_qs_2[KFSS_qs_2['QSSCAT'] == 'PHYSICAL']
+
+# Pivot table for non-'BRAIN' category
+grouped_non_brain_df = non_brain_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_non_brain_df.columns = ['USUBJID'] + [f"KFSS_P-{period}" for period in grouped_non_brain_df.columns[1:]]
+
+# Merge the new DataFrames with the original DataFrame on 'USUBJID'
+result_KFSS_2 = pd.merge(KFSS_qs_2[['USUBJID']], grouped_brain_df, on='USUBJID', how='left')
+result_KFSS_2 = pd.merge(result_KFSS_2, grouped_non_brain_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_KFSS_2 = result_KFSS_2.drop_duplicates(subset=['USUBJID'])
+
+# Reorganize columns
+#desired_order = ['USUBJID', 'KFSS_M-before', 'KFSS_M-2y', 'KFSS_M-after_2y', 'KFSS_P-before', 'KFSS_P-2y', 'KFSS_P-after_2y']
+#result_KFSS = pivot_df[desired_order]
+
+# Merge both
+result_KFSS = pd.merge(result_KFSS_1, result_KFSS_2, on='USUBJID', how='inner')
+
+# RAND36 #
+RAND36_qs = qs[qs['QSCAT'] == 'RAND-36 V1.0']
+RAND36_qs = RAND36_qs.drop(columns=['QSSEQ','QSSTRESC','VISITNUM','VISIT'])
+
+def assign_value(row):
+    if row['QSSCAT'] in ['PHYSICAL FUNCTIONING', 'GENERAL HEALTH', 'ROLE LIMITATIONS DUE TO PHYSICAL HEALTH', 'PAIN', 'HEALTH CHANGE']:
+        return 'PHYSICAL'
+    else:
+        return 'MENTAL'
+# Apply the function row-wise to assign values to desired column 
+RAND36_qs['QSNEWCAT'] = RAND36_qs.apply(assign_value, axis=1)
+
+def set_scoremax(row):
+    if row['QSSCAT'] in ['PHYSICAL FUNCTIONING']:
+        return 3
+    elif row['QSSCAT'] in ['ROLE LIMITATIONS DUE TO PHYSICAL HEALTH','ROLE LIMITATIONS DUE TO EMOTIONAL PROBLEMS']:
+        return 2
+    elif (row['QSSCAT'] in ['EMOTIONAL WELL-BEING','ENERGY/FATIGUE']) or (row['QSTEST'] in ['R3601-How Much Bodily Pain Have You Had']):
+        return 6
+    else:
+        return 5
+# Apply the function row-wise to set the values in column B
+RAND36_qs['SCOREMAX'] = RAND36_qs.apply(set_scoremax, axis=1)
+
+grouped_sum = RAND36_qs.groupby(['USUBJID', 'QSDY', 'QSNEWCAT']).agg({'QSSTRESN': 'sum', 'SCOREMAX': 'sum'}).reset_index()
+grouped_sum['QSPERC'] = grouped_sum['QSSTRESN'] / grouped_sum['SCOREMAX']
+RAND36_qs = grouped_sum.copy()
+RAND36_qs = RAND36_qs.drop(columns=['QSSTRESN','SCOREMAX'])
+RAND36_qs = RAND36_qs.copy()  # Create a copy to avoid the warning
+
+conditions = [
+    (RAND36_qs['QSDY'] <= 1),
+    (RAND36_qs['QSDY'] > 1) 
+]
+# Define corresponding values for each condition
+values = ['before', 'after'] 
+
+# Create the new column "FT_PERIOD"
+RAND36_qs['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+RAND36_qs = RAND36_qs.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test
+
+# Filtering based on the condition 'QSNEWCAT' == 'MENTAL'
+mental_df = RAND36_qs[RAND36_qs['QSNEWCAT'] == 'MENTAL']
+
+# Pivot table for 'MENTAL' category
+grouped_mental_df = mental_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_mental_df.columns = ['USUBJID'] + [f"RAND36_M-{period}" for period in grouped_mental_df.columns[1:]]
+
+# Filtering based on the condition 'QSNEWCAT' == 'PHYSICAL'
+physical_df = RAND36_qs[RAND36_qs['QSNEWCAT'] == 'PHYSICAL']
+
+# Pivot table for 'PHYSICAL' category
+grouped_physical_df = physical_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_physical_df.columns = ['USUBJID'] + [f"RAND36_P-{period}" for period in grouped_physical_df.columns[1:]]
+
+# Merge the new DataFrames with the original DataFrame on 'USUBJID'
+result_RAND36 = pd.merge(RAND36_qs[['USUBJID']], grouped_mental_df, on='USUBJID', how='left')
+result_RAND36 = pd.merge(result_RAND36, grouped_physical_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_RAND36 = result_RAND36.drop_duplicates(subset=['USUBJID'])
+
+# Reorganize the columns
+desired_order = ['USUBJID', 'RAND36_M-before', 'RAND36_M-after', 'RAND36_P-before', 'RAND36_P-after']
+result_RAND36 = result_RAND36[desired_order]
+
+# SF12 #
+SF_rows = qs[qs['QSCAT'] == 'SF-12 V2']
+columns_to_drop = ['QSCAT', 'QSORRES', 'VISITNUM', 'QSEVLINT']
+SF_rows.drop(columns=columns_to_drop, inplace=True)
+
+max_qsdy_baseline = SF_rows.loc[SF_rows['VISIT'] == 'DAY 1', 'QSDY'].max()
+
+def assign_value(row):
+    if row['QSSCAT'] in ['GENERAL HEALTH', 'PHYSICAL FUNCTIONING', 'ROLE PHYSICAL', 'BODILY PAIN']:
+        return 'PHYSICAL'
+    else:
+        return 'MENTAL'
+
+# Apply the function row-wise to assign values to desired column 
+SF_rows['QSTEST'] = SF_rows.apply(assign_value, axis=1)
+
+def set_scoremax(row):
+    return 3 if row['QSSCAT'] == 'PHYSICAL FUNCTIONING' else 5
+
+# Apply the function row-wise to set the values in desired column 
+SF_rows['SCOREMAX'] = SF_rows.apply(set_scoremax, axis=1)
+
+grouped_sum = SF_rows.groupby(['USUBJID', 'QSDY', 'QSTEST']).agg({'QSSTRESN': 'sum', 'SCOREMAX': 'sum'}).reset_index()
+grouped_sum['QSPERC'] = grouped_sum['QSSTRESN'] / grouped_sum['SCOREMAX']
+SF_rows = grouped_sum
+SF_rows = SF_rows.drop(columns=['QSSTRESN','SCOREMAX'])
+
+SF_rows = SF_rows.copy()  # Create a copy to avoid the warning
+conditions = [
+    (SF_rows['QSDY'] <= max_qsdy_baseline),
+    (SF_rows['QSDY'] > max_qsdy_baseline)
+]
+
+# Define corresponding values for each condition
+values = ['before', 'after'] 
+
+# Create the new column "FT_PERIOD"
+SF_rows['QS_PERIOD'] = np.select(conditions, values, default='NaN')
+SF_rows = SF_rows.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test
+
+# Filtering based on the condition 'QSTEST' == 'MENTAL'
+mental_df = SF_rows[SF_rows['QSTEST'] == 'MENTAL']
+
+# Pivot table for 'MENTAL' category
+grouped_mental_df = mental_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_mental_df.columns = ['USUBJID'] + [f"SF12_M-{period}" for period in grouped_mental_df.columns[1:]]
+
+# Filtering based on the condition 'QSTEST' == 'PHYSICAL'
+physical_df = SF_rows[SF_rows['QSTEST'] == 'PHYSICAL']
+
+# Pivot table for 'PHYSICAL' category
+grouped_physical_df = physical_df.pivot_table(values='QSPERC', index='USUBJID', columns='QS_PERIOD', aggfunc='median', fill_value=None).reset_index()
+grouped_physical_df.columns = ['USUBJID'] + [f"SF12_P-{period}" for period in grouped_physical_df.columns[1:]]
+
+# Merge the new DataFrames with the original DataFrame on 'USUBJID'
+result_SF = pd.merge(SF_rows[['USUBJID']], grouped_mental_df, on='USUBJID', how='left')
+result_SF = pd.merge(result_SF, grouped_physical_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_SF = result_SF.drop_duplicates(subset=['USUBJID'])
+
+# Reorganize the columns
+desired_order = ['USUBJID', 'SF12_M-before', 'SF12_M-after', 'SF12_P-before', 'SF12_P-after']
+result_SF = result_SF[desired_order]
+
+# Merge all questionnaires
+questionnaires_aggregated = pd.merge(result_BDI, result_EDSS, on='USUBJID', how='outer')
+questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_KFSS, on='USUBJID', how='outer')
+questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_RAND36, on='USUBJID', how='outer')
+questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_SF, on='USUBJID', how='outer')
+
+folder_name = 'new_data'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# Specify the path for the CSV file
+csv_file_path = os.path.join(folder_name, 'QS_agg.csv')
+
+# Save the DataFrame to CSV
+questionnaires_aggregated.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("QS_agg.csv has been created in the folder new_data")
