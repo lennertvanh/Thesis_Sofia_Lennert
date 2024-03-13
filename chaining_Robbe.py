@@ -61,7 +61,7 @@ class Chain(BaseEstimator):
                 Xext[col] = y[col]
         return self
 
-    def predict(self, X, y): #add y to be able to propagate true values
+    def predict(self, X):
         """Use the chain to predict for new data.
 
         @param X: Input DataFrame or 2D numpy array.
@@ -78,5 +78,27 @@ class Chain(BaseEstimator):
             elif self.propagate == "true":
                 Xext[col] = y[col]
         return Xext.iloc[:, -len(self.models):]
-    
-  
+
+
+if __name__ == "__main__":
+    import numpy as np
+    from sklearn.datasets import load_iris
+    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+    from sklearn.metrics import mean_squared_error as mse
+    X, y = load_iris(return_X_y=True)
+    y = np.vstack((X[:,-1], y)).T
+    X = X[:, :-1]
+
+    chain = Chain(
+        model_reg=RandomForestRegressor(random_state=42),
+        model_clf=RandomForestClassifier(random_state=42),
+        propagate="pred",
+    )
+    chain.fit(X,y, target_types=["reg","clf"])
+    y_pred = chain.predict(X)
+    scores = [ 
+        mse(y[:,0], y_pred.iloc[:,0]),
+        mse(y[:,1], y_pred.iloc[:,1]),
+    ]
+    print(f"MSE = {scores[0]:.2f}, {scores[1]:.2f}")
+
