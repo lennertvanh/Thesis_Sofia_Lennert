@@ -78,5 +78,4 @@ class Chain(BaseEstimator):
             elif self.propagate == "true":
                 Xext[col] = y[col]
         return Xext.iloc[:, -len(self.models):]
-    
   
