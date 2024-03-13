@@ -172,3 +172,152 @@ print("FT_agg.csv has been created in the folder new_data")
 file_name = 'oe.csv'
 file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
 opt = pd.read_csv(file_path)
+
+missing_percentage_opt = (opt.isnull().sum() / len(opt)) * 100
+missing_opt = pd.DataFrame({'Column Name': missing_percentage_opt.index, 'Missing Percentage': missing_percentage_opt.values})
+
+# Set the threshold for missing percentage
+threshold = 90
+
+# Filter columns based on missing percentage
+columns_to_drop = missing_opt[missing_opt['Missing Percentage'] >= threshold]['Column Name']
+
+# Drop columns from the DataFrame
+opt = opt.drop(columns=columns_to_drop)
+
+# Remove redundant columns
+opt = opt.drop(columns=['STUDYID', 'DOMAIN', 'OETESTCD', 'OELOC', 'OECAT', 'OEORRES'])
+
+# SNELLEN EQUIVALENT SCORE #
+SES_df = opt[opt['OETEST'] == 'Snellen Equivalent Score'].copy()  # Create a copy to avoid the warning
+
+conditions = [
+    (SES_df['OEDY'] <= 1),
+    (SES_df['OEDY'] > 1)
+]
+
+# Define corresponding values for each condition
+values = ['before', 'after']
+
+# Create the new column "FT_PERIOD"
+SES_df['OE_PERIOD'] = np.select(conditions, values, default='NaN')
+
+SES_df['OESTRESC'] = SES_df['OESTRESC'].replace(0.2, 30)
+SES_df['OESTRESN'] = SES_df['OESTRESN'].replace(0.2, 30)
+
+# Function to fill missing values in OESTRESN based on OESTRESC
+def fill_missing_oestresn(row):
+    if pd.isna(row['OESTRESN']):
+        # Extract the second number after "6/"
+        oestresc_values = str(row['OESTRESC']).split('/')
+        if len(oestresc_values) == 2:
+            second_number = oestresc_values[1].strip()
+            try:
+                # Try converting the second number to float
+                return float(second_number)
+            except ValueError:
+                # Handle the case where conversion to float fails
+                return None
+    return row['OESTRESN']
+
+# Apply the function to fill missing values in OESTRESN
+SES_df['OESTRESN'] = SES_df.apply(fill_missing_oestresn, axis=1)
+
+# Pivot SES_df to create a new DataFrame with median values for each period and patient
+grouped_df = SES_df.pivot_table(values='OESTRESN', index='USUBJID', columns='OE_PERIOD', aggfunc='median', fill_value=None).reset_index()
+
+# Rename the columns to SES_after and SES_before
+grouped_df.columns = ['USUBJID', 'SES_after', 'SES_before']
+
+# Merge the new DataFrame with the original DataFrame based on 'USUBJID'
+result_SES = pd.merge(SES_df[['USUBJID']], grouped_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to retain unique rows per patient and period
+result_SES = result_SES.drop_duplicates(subset=['USUBJID'])
+
+# Change the values in the SES_after and SES_before columns to 6 divided by the original values
+result_SES[['SES_after', 'SES_before']] = 6 / result_SES[['SES_after', 'SES_before']]
+
+# DECIMAL SCORE #
+DC_rows = opt[opt['OETEST'] == 'Decimal Score']
+
+result_DC = DC_rows.pivot_table(index='USUBJID', columns='OELAT', values='OESTRESN', aggfunc='min').reset_index()
+result_DC.columns = ['USUBJID', 'DS_Left', 'DS_Right']
+
+# Create a new column 'DS' with the minimum value between DS_L and DS_R
+result_DC['DS'] = result_DC[['DS_Left', 'DS_Right']].min(axis=1)
+
+# Update DS_L and DS_R based on the conditions
+result_DC['DS_L'] = np.where(result_DC['DS_Left'] <= result_DC['DS_Right'], 1, 0)
+result_DC['DS_R'] = np.where(result_DC['DS_Right'] <= result_DC['DS_Left'], 1, 0)
+
+# Drop DS_Left and DS_Right columns
+result_DC = result_DC.drop(['DS_Left', 'DS_Right'], axis=1)
+
+# SLOAN LETTER EYE CHART #
+SLEC_rows = opt[(opt['OETEST'] == 'Number of Letters Correct') & (opt['OEMETHOD'] == 'SLOAN LETTER EYE CHART 1.25%')].copy()
+SLEC_rows = SLEC_rows[SLEC_rows['OELAT'] == 'B']
+
+conditions = [
+    (SLEC_rows['OEDY'] <= 1),
+    (SLEC_rows['OEDY'] > 1)
+]
+
+# Define corresponding values for each condition
+values = ['before', 'after']
+
+# Create the new column "FT_PERIOD"
+SLEC_rows['OE_PERIOD'] = np.select(conditions, values, default='NaN')
+SLEC_rows = SLEC_rows.dropna(subset=['OEDY']) #Drop observations for which we don't have time of test!
+
+grouped_df = SLEC_rows.pivot_table(values='OESTRESN', index='USUBJID', columns='OE_PERIOD', aggfunc='median', fill_value=None).reset_index() #min
+
+# Rename the columns 
+grouped_df.columns = ['USUBJID'] + [f"SLEC_{period}" for period in grouped_df.columns[1:]]
+
+# Merge the new DataFrame with the original DataFrame on 'USUBJID'
+result_SLEC = pd.merge(SLEC_rows[['USUBJID']], grouped_df, on='USUBJID', how='left')
+
+# Drop duplicate rows to keep only unique rows per patient and period
+result_SLEC = result_SLEC.drop_duplicates(subset=['USUBJID'])
+
+# Desired column order
+desired_order = ['USUBJID', 'SLEC_before', 'SLEC_after']
+result_SLEC = result_SLEC[desired_order]
+
+# VISUAL ACUITY ASSESSMENT #
+VAA_rows = opt[opt['OETEST'] == 'Visual Acuity Assessment']
+
+result_VAA = VAA_rows.groupby('USUBJID')['OESTRESC'].apply(lambda x: 1 if 'ABNORMAL' in x.values else 0).reset_index()
+result_VAA.columns = ['USUBJID', 'VAA']
+
+# Merge individual dataframes from OE #
+# Extract unique USUBJID values from the opt DataFrame
+unique_usubjid = opt['USUBJID'].unique()
+
+# Initialize an empty DataFrame with the unique USUBJID values
+final_merged_df = pd.DataFrame({'USUBJID': unique_usubjid})
+
+# List of result DataFrames
+result_dfs = [result_DC, result_SLEC, result_SES, result_VAA]
+
+# Iterate through result DataFrames and perform left merges
+for result_df in result_dfs:
+    final_merged_df = pd.merge(final_merged_df, result_df, on='USUBJID', how='left')
+
+#Export data
+folder_name = 'new_data'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# Specify the path for the CSV file
+csv_file_path = os.path.join(folder_name, 'OE_agg.csv')
+
+# Save the DataFrame to CSV
+final_merged_df.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("OE_agg.csv has been created in the folder new_data")
+
+
+
