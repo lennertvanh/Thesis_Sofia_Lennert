@@ -9,6 +9,324 @@ possible_paths = [
 ]
 
 ################################################
+################# Demographics #################
+################################################
+
+# Load the data
+file_name = 'dm.csv'
+file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
+demographics = pd.read_csv(file_path)
+
+# Drop initial columns
+columns_to_drop = ['STUDYID','DOMAIN','SUBJID','RFSTDTC','RFENDTC','DTHDTC','DTHFL','SITEID','INVID','INVNAM','BRTHDTC','AGEU','ETHNIC','ARMCD','ARM','ACTARMCD','ACTARM','DMDTC','DMDY','DMENDY','DMDTC_TS','RFENDTC_TS','RFSTDTC_TS']
+demographics = demographics.drop(columns_to_drop, axis=1)
+
+# Convert RACE to 2 categories
+demographics['RACE'] = demographics['RACE'].apply(lambda x: 'WHITE' if x == 'WHITE' else 'NON-WHITE' if pd.notnull(x) else np.nan)
+
+# Convert COUNTRY to CONTINENT
+continent_mapping = {
+    'USA': 'North America',
+    'POL': 'Europe',
+    'CAN': 'North America',
+    'UKR': 'Europe',
+    'CZE': 'Europe',
+    'IND': 'Asia',
+    'RUS': 'Eurasia',
+    'SRB': 'Europe',
+    'DEU': 'Europe',
+    'GBR': 'Europe',
+    'NLD': 'Europe',
+    'BGR': 'Europe',
+    'HUN': 'Europe',
+    'ROU': 'Europe',
+    'GRC': 'Europe',
+    'FRA': 'Europe',
+    'NZL': 'Oceania',
+    'BEL': 'Europe',
+    'SWE': 'Europe',
+    'MEX': 'North America',
+    'EST': 'Europe',
+    'ESP': 'Europe',
+    'PER': 'South America',
+    'GEO': 'Asia',
+    'AUS': 'Oceania',
+    'ISR': 'Asia',
+    'CHE': 'Europe',
+    'HRV': 'Europe',
+    'TUR': 'Eurasia',
+    'COL': 'South America',
+    'LVA': 'Europe',
+    'FIN': 'Europe',
+    'IRL': 'Europe',
+    'DNK': 'Europe',
+    'CHL': 'South America'
+}
+
+demographics['CONTINENT'] = demographics['COUNTRY'].map(continent_mapping)
+demographics['CONTINENT'] = demographics['CONTINENT'].str.upper()
+demographics = demographics.drop('COUNTRY', axis=1)
+
+# Export data to DM_agg.csv
+folder_name = 'new_data'
+
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+csv_file_path = os.path.join(folder_name, 'DM_agg.csv')
+demographics.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("DM_agg.csv has been created in the folder new_data")
+
+
+
+################################################
+############### Clinical Events ################
+################################################
+
+# Load data
+file_name = 'ce.csv'
+file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
+clinical_events = pd.read_csv(file_path)
+
+# Drop some initial columns
+missing_percentage_ce = (clinical_events.isnull().sum() / len(clinical_events)) * 100
+missing_clinical_events = pd.DataFrame({'Column Name': missing_percentage_ce.index, 'Missing Percentage': missing_percentage_ce.values})
+missing_clinical_events = missing_clinical_events.sort_values(by='Missing Percentage', ascending=False)
+
+columns_to_drop = missing_clinical_events[missing_clinical_events['Missing Percentage'] > 85]['Column Name'].tolist()
+additional_columns_to_drop = ['STUDYID', 'DOMAIN']  # Add your column names here
+columns_to_drop.extend(additional_columns_to_drop)
+clinical_events.drop(columns=columns_to_drop, inplace=True)
+
+# Remove cases where CEDECOD is "MULTIPLE SCLEROSIS"
+ms_entries = ['Multiple Sclerosis', 'MULTIPLE SCLEROSIS', 'MULTIPLE SCLEROSIS AGGRAVATED', 'PROGRESSION OF MULTIPLE SCLEROSIS', 'MS-LIKE SYNDROME']
+clinical_events = clinical_events[~clinical_events['CEMODIFY'].isin(ms_entries)]
+
+# New set of columns to drop
+columns_to_drop_2 = ['VISIT','VISITNUM','CEDECOD','CEENDY','CEDY','CEPRESP','CEBODSYS','MIDS','CESEQ']
+clinical_events.drop(columns=columns_to_drop_2, inplace=True)
+
+# Count total of relapses
+clinical_events['TOTRELAP'] = clinical_events.groupby('USUBJID')['USUBJID'].transform('count')
+
+# Obtain static dataframe
+def aggregate_and_remove_duplicates(series):
+    unique_values = set(series.dropna())  # Drop NaN and convert to set
+    return '; '.join(map(str, unique_values))
+
+clinical_events_aggregated = clinical_events.groupby('USUBJID').agg(aggregate_and_remove_duplicates).reset_index()
+clinical_events_aggregated.replace('', np.nan, inplace=True)
+clinical_events_aggregated.drop(columns=['CETERM','CEMODIFY','CESTDY','CESER','CEOCCUR'], inplace=True)
+
+# Store only high relapse severity
+def replace_words(row):
+    if isinstance(row, str):
+        if 'SEVERE' in row:
+            return 'SEVERE'
+        elif 'MODERATE' in row:
+            return 'MODERATE'
+        elif 'MILD' in row:
+            return 'MILD'
+        else:
+            return row
+    else:
+        return row
+
+clinical_events_aggregated['CESEV'] = clinical_events_aggregated['CESEV'].apply(replace_words)
+
+# Convert total relapses to numeric
+clinical_events_aggregated['TOTRELAP'] = pd.to_numeric(clinical_events_aggregated['TOTRELAP'], errors='coerce')
+
+# Export dataframe to CSV
+folder_name = 'new_data'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+csv_file_path = os.path.join(folder_name, 'CE_agg.csv')
+clinical_events_aggregated.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("CE_agg.csv has been created in the folder new_data")
+
+
+
+################################################
+########## Subject Disease Milestones ##########
+################################################
+
+# Load data
+file_name = 'sm.csv'
+file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
+milestones = pd.read_csv(file_path)
+
+# Drop some initial columns
+columns_to_drop = ['STUDYID','DOMAIN','SMSEQ','SMENRF','MIDSTYPE']
+milestones = milestones.drop(columns_to_drop, axis=1)
+
+# Count number of relapses for each patient
+milestones['Number'] = milestones['MIDS'].str.extract(r'(\d+)').astype(int)
+milestones['NRELAP'] = milestones.groupby('USUBJID')['Number'].transform('max')
+milestones = milestones.drop(['MIDS', 'Number', 'SMENDY'], axis=1)
+
+# Keep the first row for each patient
+milestones_final = milestones.groupby('USUBJID').first().reset_index()
+
+# Export data to csv
+folder_name = 'new_data'
+
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+csv_file_path = os.path.join(folder_name, 'SM_agg.csv')
+milestones_final.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("SM_agg.csv has been created in the folder new_data")
+
+
+
+################################################
+############### Medical History ################
+################################################
+
+# Load data
+file_name = 'mh.csv'
+file_path = next(f'{path}/{file_name}' for path in possible_paths if os.path.exists(f'{path}/{file_name}'))
+medical_history = pd.read_csv(file_path)
+
+# Drop initial columns
+missing_percentage_mh = (medical_history.isnull().sum() / len(medical_history)) * 100
+missing_medical_history = pd.DataFrame({'Column Name': missing_percentage_mh.index, 'Missing Percentage': missing_percentage_mh.values})
+missing_medical_history = missing_medical_history.sort_values(by='Missing Percentage', ascending=False)
+columns_to_drop = missing_medical_history[missing_medical_history['Missing Percentage'] > 95]['Column Name'].tolist()
+additional_columns_to_drop = ['STUDYID', 'DOMAIN', 'MHENTPT','MHLLT','MHENRTPT','MHHLGT','MHEVLINT'] #'MHSTDY',
+columns_to_drop.extend(additional_columns_to_drop)
+medical_history.drop(columns=columns_to_drop, inplace=True)
+
+# Create indicators for 4 medical factors
+# CARDIOVASCULAR
+terms_to_check = ['CARDIOVASCULAR']# or 'ALLERGY', 'ALLERGIES'
+pattern = '|'.join(terms_to_check)
+
+for index, row in medical_history.iterrows():
+    found_term = False  # Flag to track if either term is found in any column
+    for column in ['MHTERM', 'MHDECOD', 'MHCAT', 'MHBODSYS']:
+        if pd.notna(row[column]) and pd.Series(row[column]).str.contains(pattern, case=False, regex=True).any():
+            found_term = True
+            break  # Break the loop when a match is found in any column
+
+    medical_history.at[index, 'MHNEWCAT'] = 'CARDIO' if found_term else pd.NA
+
+
+# URINARY
+terms_to_check = ['BLADDER', 'URINARY','URINATION']#'GENITOURINARY',
+pattern = '|'.join(terms_to_check)
+
+for index, row in medical_history.iterrows():
+    found_term = False  # Flag to track if either term is found in any column
+    for column in ['MHTERM', 'MHDECOD', 'MHCAT', 'MHBODSYS']:
+        if pd.notna(row[column]) and pd.Series(row[column]).str.contains(pattern, case=False, regex=True).any():
+            found_term = True
+            break  # Break the loop when a match is found in any column
+
+    if pd.isna(row['MHNEWCAT']):
+        medical_history.at[index, 'MHNEWCAT'] = 'URINARY' if found_term else pd.NA
+
+
+# MUSCULOSKELETAL
+terms_to_check = ['MUSCULOSKELETAL']# or MUSCLE
+pattern = '|'.join(terms_to_check)
+
+for index, row in medical_history.iterrows():
+    found_term = False  # Flag to track if either term is found in any column
+    for column in ['MHTERM', 'MHDECOD', 'MHCAT', 'MHBODSYS','MHSOC']:
+        if pd.notna(row[column]) and pd.Series(row[column]).str.contains(pattern, case=False, regex=True).any():
+            found_term = True
+            break  # Break the loop when a match is found in any column
+
+    if pd.isna(row['MHNEWCAT']):
+        medical_history.at[index, 'MHNEWCAT'] = 'MUSCKELET' if found_term else pd.NA
+
+
+# FATIGUE
+terms_to_check = ['FATIGUE']
+pattern = '|'.join(terms_to_check)
+
+for index, row in medical_history.iterrows():
+    found_term = False  # Flag to track if either term is found in any column
+    for column in ['MHTERM', 'MHDECOD', 'MHCAT', 'MHBODSYS','MHSOC']:
+        if pd.notna(row[column]) and pd.Series(row[column]).str.contains(pattern, case=False, regex=True).any():
+            found_term = True
+            break  # Break the loop when a match is found in any column
+
+    if pd.isna(row['MHNEWCAT']):
+        medical_history.at[index, 'MHNEWCAT'] = 'FATIGUE' if found_term else pd.NA
+
+
+# New set of columns to drop
+columns_to_drop_2 = ['MHSEQ', 'VISIT', 'VISITNUM', 'MHSCAT', 'MHENRF', 'MHDY', 'MHSTDY', 'MHOCCUR', 'MHPRESP', 'MHSEV'] #, 
+medical_history.drop(columns=columns_to_drop_2, inplace=True)
+
+# Remove rows where MHDIAG is 'MS DIAGNOSIS'
+medical_history['MHDIAGN'] = medical_history.loc[medical_history['MHCAT'].isin(['DIAGNOSIS', 'PRIMARY DIAGNOSIS']), 'MHTERM']
+
+# Clean MHDIAG
+medical_history['MHDIAGN'] = medical_history['MHDIAGN'].replace('RELAPSING-REMITTING', 'RRMS')
+medical_history['MHDIAGN'] = medical_history['MHDIAGN'].replace('PRIMARY-PROGRESSIVE', 'PPMS')
+medical_history['MHDIAGN'] = medical_history['MHDIAGN'].replace({'SPMS DIAGNOSIS','SECONDARY-PROGRESSIVE'}, 'SPMS')
+medical_history['MHDIAGN'] = medical_history['MHDIAGN'].replace({'MS DIAGNOSIS CONFIRMED BY MRI','MS DIAGNOSIS','SUSPECTED ONSET OF MS','PROGRESSIVE RELAPSING'}, np.nan) #'MS'
+
+# Obtain static dataframe
+def aggregate_and_remove_duplicates(series):
+    unique_values = set(series.dropna())  # Drop NaN and convert to set
+    return '; '.join(map(str, unique_values))
+
+medical_history_aggregated = medical_history.groupby('USUBJID').agg(aggregate_and_remove_duplicates).reset_index()
+medical_history_aggregated.replace('', np.nan, inplace=True)
+medical_history_aggregated['MHCAT'] = medical_history_aggregated['MHCAT'].replace('PRIMARY DIAGNOSIS', 'DIAGNOSIS')
+medical_history_aggregated.drop(columns=['MHTERM','MHDECOD', 'MHCAT','MHBODSYS','MHSOC'], inplace=True)
+
+
+# Create binary indicators for the 4 medical factors
+def has_cardio(text):
+    return 1 if pd.notna(text) and 'CARDIO' in text else 0
+
+def has_urinary(text):
+    return 1 if pd.notna(text) and 'URINARY' in text else 0
+
+def has_muscles(text):
+    return 1 if pd.notna(text) and 'MUSCKELET' in text else 0
+
+def has_fatigue(text):
+    return 1 if pd.notna(text) and 'FATIGUE' in text else 0
+
+medical_history_aggregated['CARDIO'] = medical_history_aggregated['MHNEWCAT'].apply(has_cardio)
+medical_history_aggregated['URINARY'] = medical_history_aggregated['MHNEWCAT'].apply(has_urinary)
+medical_history_aggregated['MUSCKELET'] = medical_history_aggregated['MHNEWCAT'].apply(has_muscles)
+medical_history_aggregated['FATIGUE'] = medical_history_aggregated['MHNEWCAT'].apply(has_fatigue)
+
+medical_history_aggregated.drop(columns=['MHNEWCAT'], inplace=True)
+
+# Keep 'Y' for MHCONTRT
+medical_history_aggregated['MHCONTRT'] = medical_history_aggregated['MHCONTRT'].replace('N; Y', 'Y')
+medical_history_aggregated['MHCONTRT'] = medical_history_aggregated['MHCONTRT'].replace('Y; N', 'Y')
+
+# Export data to csv
+folder_name = 'new_data'
+
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+csv_file_path = os.path.join(folder_name, 'MH_agg.csv')
+medical_history_aggregated.to_csv(csv_file_path, index=False)
+
+# Print message after CSV file creation
+print("OE_agg.csv has been created in the folder new_data")
+
+
+################################################
 ############### Functional Tests ###############
 ################################################
 
@@ -282,8 +600,8 @@ result_SLEC = pd.merge(SLEC_rows[['USUBJID']], grouped_df, on='USUBJID', how='le
 result_SLEC = result_SLEC.drop_duplicates(subset=['USUBJID'])
 
 # Desired column order
-desired_order = ['USUBJID', 'SLEC_before', 'SLEC_after']
-result_SLEC = result_SLEC[desired_order]
+#desired_order = ['USUBJID', 'SLEC_before', 'SLEC_after']
+#result_SLEC = result_SLEC[desired_order]
 
 # VISUAL ACUITY ASSESSMENT #
 VAA_rows = opt[opt['OETEST'] == 'Visual Acuity Assessment']
