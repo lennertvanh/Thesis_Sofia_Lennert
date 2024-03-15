@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 
-class Chain(BaseEstimator):
+class Chain_thesis(BaseEstimator):
     """Regression and classification chains for multi-target prediction."""
 
     def __init__(self, model_reg, model_clf, propagate="pred"):
@@ -82,4 +82,3 @@ class Chain(BaseEstimator):
             elif self.propagate == "true":
                 Xext[col] = y[col]
         return Xext.iloc[:, -len(self.models):]
-  
