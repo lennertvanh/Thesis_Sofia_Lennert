@@ -784,21 +784,16 @@ usubjid_inf_percentage_missing = missing_data[missing_data['percentage_missing']
 KFSS_qs = KFSS_qs[~KFSS_qs['USUBJID'].isin(usubjid_inf_percentage_missing)]
 KFSS_qs = KFSS_qs.drop(columns=['QSEVLINT'])
 
+KFSS_qs = KFSS_qs[KFSS_qs['QSTEST'] != 'KFSS1-Other Functions']
+
 #put as NA rows with values 9 or 99
 KFSS_qs['QSSTRESN'] = KFSS_qs['QSSTRESN'].replace([9, 99], pd.NA)
 
 KFSS_qs_1=KFSS_qs.copy()
 KFSS_qs_2=KFSS_qs.copy()
 
-filter_tuples = [('MSOAC/0281',	435.0), ('MSOAC/2231', 785.0), ('MSOAC/2698', 710.0), ('MSOAC/6547', 1.0),('MSOAC/6823',1.0)]
-filtered_df = KFSS_qs[KFSS_qs.apply(lambda row: (row['USUBJID'], row['QSDY']) in filter_tuples, axis=1)]
-
 KFSS_qs_1['QSSTRESN'] = KFSS_qs_1.groupby(['USUBJID', 'QSTEST', 'QSDY'])['QSSTRESN'].transform('mean')
 KFSS_qs_1.drop_duplicates(subset=['USUBJID', 'QSTEST', 'QSDY'	, 'QSSTRESN'], inplace=True)
-
-num_tests = KFSS_qs_1.copy()
-num_tests['COUNT'] = num_tests.groupby(['USUBJID', 'QSDY'])['USUBJID'].transform('count')
-num_tests=num_tests[['USUBJID','QSDY', 'COUNT']].drop_duplicates()
 
 def set_scoremax(row):
     if row['QSTEST'] in ['KFSS1-Cerebellar Functions', 'KFSS1-Brain Stem Functions', 'KFSS1-Cerebral or Mental Functions']:
