@@ -71,12 +71,11 @@ class Chain(BaseEstimator):
             X = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
         Xext = X.copy()
         for col, model in zip(self.y_columns, self.models):
-            yi_pred = model.predict(Xext)
-            if self.propagate == "pred":
+            if self.propagate == False:
+                yi_pred = model.predict(X)
+            else:
                 yi_pred = model.predict(Xext)
-                Xext[col] = yi_pred
-            elif self.propagate == "true":
-                Xext[col] = y[col]
+            Xext[col] = yi_pred
         return Xext.iloc[:, -len(self.models):]
 
 
