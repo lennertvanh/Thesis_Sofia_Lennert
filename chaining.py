@@ -61,7 +61,7 @@ class Chain(BaseEstimator):
                 Xext[col] = y[col]
         return self
 
-    def predict(self, X, y): #add y to be able to propagate true values
+    def predict(self, X, y): #add y to be able to propagate pred/true values
         """Use the chain to predict for new data.
 
         @param X: Input DataFrame or 2D numpy array.
@@ -69,6 +69,10 @@ class Chain(BaseEstimator):
         assert len(self.y_columns) == len(self.models)  # 1 model for each target
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
+        # added next 3 lines for the case where y is np_array
+        if not isinstance(y, pd.DataFrame):
+            y = pd.DataFrame(y, columns=[f"y{i}" for i in range(y.shape[1])])
+        assert all(X.index == y.index)
         Xext = X.copy()
         for col, model in zip(self.y_columns, self.models):
             yi_pred = model.predict(Xext)
