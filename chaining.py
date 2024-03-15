@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 
-class Chain_thesis(BaseEstimator):
+class Chain(BaseEstimator):
     """Regression and classification chains for multi-target prediction."""
 
     def __init__(self, model_reg, model_clf, propagate="pred"):
@@ -61,7 +61,7 @@ class Chain_thesis(BaseEstimator):
                 Xext[col] = y[col]
         return self
 
-    def predict(self, X, y): #add y to be able to propagate pred/true values
+    def predict(self, X):
         """Use the chain to predict for new data.
 
         @param X: Input DataFrame or 2D numpy array.
@@ -69,16 +69,11 @@ class Chain_thesis(BaseEstimator):
         assert len(self.y_columns) == len(self.models)  # 1 model for each target
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-        # added next 3 lines for the case where y is np_array
-        if not isinstance(y, pd.DataFrame):
-            y = pd.DataFrame(y, columns=[f"y{i}" for i in range(y.shape[1])])
-        assert all(X.index == y.index)
         Xext = X.copy()
         for col, model in zip(self.y_columns, self.models):
-            yi_pred = model.predict(Xext)
-            if self.propagate == "pred":
+            if self.propagate == False:
+                yi_pred = model.predict(X)
+            else:
                 yi_pred = model.predict(Xext)
-                Xext[col] = yi_pred
-            elif self.propagate == "true":
-                Xext[col] = y[col]
+            Xext[col] = yi_pred
         return Xext.iloc[:, -len(self.models):]
