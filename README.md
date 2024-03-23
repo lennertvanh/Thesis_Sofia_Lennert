@@ -27,7 +27,7 @@ To install all of the required `pip` packages to this environment, simply run:
 pip install -r requirements.txt
 ```
 
-Now, you're all set to locally run the app, which will be explained in the next section.
+Now, you're all set to locally run the app.
 
 
 ## Authors
