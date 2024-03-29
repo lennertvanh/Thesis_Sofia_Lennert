@@ -61,7 +61,11 @@ class Chain(BaseEstimator):
                     yi_pred = pd.Series(yi_pred).replace(-1, np.nan, inplace=True)
                 Xext[col] = yi_pred
             elif self.propagate == "true":
-                Xext[col] = y[col]
+                yi_true = y[col]
+                if yi_true.dtype == 'object':
+                    yi_true = pd.Categorical(yi_true).codes
+                    yi_true = pd.Series(yi_true).replace(-1, np.nan, inplace=True)
+                Xext[col] = yi_true
         return self
 
     def predict(self, X):
