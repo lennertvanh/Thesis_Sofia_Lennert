@@ -1060,6 +1060,29 @@ questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_KFSS, on=
 questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_RAND36, on='USUBJID', how='outer')
 questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_SF, on='USUBJID', how='outer')
 
+##################################################################################################################
+### DELETE THIS PART IN THE CODE IF YOU WANT THE RAND36 AND SF12 SEPARATELY
+    ### BECAUSE THEY ARE DISJOINT, WE MERGE THEM INTO ONE COLUMN (since both are percentages)
+    ### NOTE: for the binary indicator we can only keep one (before and after - because this will be the same)
+# Create a new column 'RAND36_M-before' and fill it with values from 'SF12_M-before'
+questionnaires_aggregated['M_R36-SF12-before'] = questionnaires_aggregated['RAND36_M-before'].fillna(questionnaires_aggregated['SF12_M-before'])
+# Create a new column 'RAND36_P-before' and fill it with values from 'SF12_P-before'
+questionnaires_aggregated['P_R36-SF12-before'] = questionnaires_aggregated['RAND36_P-before'].fillna(questionnaires_aggregated['SF12_P-before'])
+# Create a new column 'R36-SF12-before' with a binary indicator
+questionnaires_aggregated['R36-SF12-before_Ind'] = questionnaires_aggregated.apply(lambda row: 1 if pd.notna(row['RAND36_M-before']) else (0 if pd.notna(row['SF12_M-before']) else np.nan), axis=1)
+# Drop the original columns if needed
+questionnaires_aggregated = questionnaires_aggregated.drop(['SF12_P-before','SF12_M-before','RAND36_P-before','RAND36_M-before'], axis=1)
+
+# Create a new column 'RAND36_M-after' and fill it with values from 'SF12_M-after'
+questionnaires_aggregated['M_R36-SF12-after'] = questionnaires_aggregated['RAND36_M-after'].fillna(questionnaires_aggregated['SF12_M-after'])
+# Create a new column 'RAND36_P-after' and fill it with values from 'SF12_P-after'
+questionnaires_aggregated['P_R36-SF12-after'] = questionnaires_aggregated['RAND36_P-after'].fillna(questionnaires_aggregated['SF12_P-after'])
+# Create a new column 'R36-SF12' with a binary indicator
+questionnaires_aggregated['R36-SF12-after_Ind'] = questionnaires_aggregated.apply(lambda row: 1 if pd.notna(row['RAND36_M-after']) else (0 if pd.notna(row['SF12_M-after']) else np.nan), axis=1)
+# Drop the original columns if needed
+questionnaires_aggregated = questionnaires_aggregated.drop(['SF12_P-after','SF12_M-after','RAND36_P-after','RAND36_M-after'], axis=1)
+##################################################################################################################
+
 folder_name = 'new_data'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
@@ -1124,7 +1147,6 @@ else:
     merged_df = pd.merge(merged_df, dataset6, on='USUBJID', how='outer')
     merged_df = pd.merge(merged_df, dataset7, on='USUBJID', how='outer')
 
-
 folder_name = 'new_data'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
@@ -1134,6 +1156,5 @@ csv_file_path = os.path.join(folder_name, 'merged_data.csv')
 
 # Save the DataFrame to CSV
 merged_df.to_csv(csv_file_path, index=False)
-
 
 print("Complete: Unified static dataframe has been obtained")
