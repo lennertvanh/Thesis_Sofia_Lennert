@@ -1147,6 +1147,20 @@ else:
     merged_df = pd.merge(merged_df, dataset6, on='USUBJID', how='outer')
     merged_df = pd.merge(merged_df, dataset7, on='USUBJID', how='outer')
 
+
+# If someone has NA in the number of confirmed relapses, then set to 0
+merged_df['NRELAP'] = merged_df['NRELAP'].fillna(0)
+
+def bin_column(value):
+    if value in [0, 1, 2, 3]:
+        return str(value)
+    else:
+        return '4+'
+
+merged_df['NRELAP'] = merged_df['NRELAP'].apply(bin_column)
+
+
+### EXPORT 
 folder_name = 'new_data'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
