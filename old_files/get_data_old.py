@@ -671,7 +671,7 @@ columns_to_drop = missing_qs[missing_qs['Missing Percentage'] >= threshold]['Col
 qs = qs.drop(columns=columns_to_drop)
 
 # Remove redundant columns
-qs = qs.drop(columns=['STUDYID', 'DOMAIN']) #, 'QSTESTCD'
+qs = qs.drop(columns=['STUDYID', 'DOMAIN', 'QSTESTCD'])
 qs.sort_values(by=['USUBJID', 'QSSEQ'], inplace=True)
 
 # BDI II #
@@ -927,12 +927,6 @@ result_KFSS = pd.merge(result_KFSS_1, result_KFSS_2, on='USUBJID', how='inner')
 RAND36_qs = qs[qs['QSCAT'] == 'RAND-36 V1.0']
 RAND36_qs = RAND36_qs.drop(columns=['QSSEQ','QSSTRESC','VISITNUM','VISIT'])
 
-def replace_last_two_chars(string):
-    return string[-2:]
-
-# Apply the function to the column
-RAND36_qs['QSTESTCD'] = RAND36_qs['QSTESTCD'].apply(replace_last_two_chars)
-
 def assign_value(row):
     if row['QSSCAT'] in ['PHYSICAL FUNCTIONING', 'GENERAL HEALTH', 'ROLE LIMITATIONS DUE TO PHYSICAL HEALTH', 'PAIN', 'HEALTH CHANGE']:
         return 'PHYSICAL'
@@ -952,19 +946,6 @@ def set_scoremax(row):
         return 5
 # Apply the function row-wise to set the values in column B
 RAND36_qs['SCOREMAX'] = RAND36_qs.apply(set_scoremax, axis=1)
-
-# Function to reverse code the value
-def reverse_code(value, max_scale):
-    return max_scale - value + 1
-
-# List of question numbers to reverse code
-questions_to_reverse = ['01', '02', '20', '22', '34', '36', '21', '23', '26', '27', '30']
-
-# Iterate through the rows and reverse code if the question number is in the list
-for index, row in RAND36_qs.iterrows():
-    if row['QSTESTCD'] in questions_to_reverse:
-        max_scale = row['SCOREMAX']
-        RAND36_qs.at[index, 'QSSTRESN'] = reverse_code(row['QSSTRESN'], max_scale)
 
 grouped_sum = RAND36_qs.groupby(['USUBJID', 'QSDY', 'QSNEWCAT']).agg({'QSSTRESN': 'sum', 'SCOREMAX': 'sum'}).reset_index()
 grouped_sum['QSPERC'] = grouped_sum['QSSTRESN'] / grouped_sum['SCOREMAX']
@@ -1010,10 +991,6 @@ result_RAND36 = result_RAND36[desired_order]
 
 # SF12 #
 SF_rows = qs[qs['QSCAT'] == 'SF-12 V2']
-
-# Apply the function to the column
-SF_rows['QSTESTCD'] = SF_rows['QSTESTCD'].apply(replace_last_two_chars)
-
 columns_to_drop = ['QSCAT', 'QSORRES', 'VISITNUM', 'QSEVLINT']
 SF_rows.drop(columns=columns_to_drop, inplace=True)
 
@@ -1033,15 +1010,6 @@ def set_scoremax(row):
 
 # Apply the function row-wise to set the values in desired column 
 SF_rows['SCOREMAX'] = SF_rows.apply(set_scoremax, axis=1)
-
-# List of question numbers to reverse code
-questions_to_reverse = ['01', '05', '6A', '6B']
-
-# Iterate through the rows and reverse code if the question number is in the list
-for index, row in SF_rows.iterrows():
-    if row['QSTESTCD'] in questions_to_reverse:
-        max_scale = row['SCOREMAX']
-        SF_rows.at[index, 'QSSTRESN'] = reverse_code(row['QSSTRESN'], max_scale)
 
 grouped_sum = SF_rows.groupby(['USUBJID', 'QSDY', 'QSTEST']).agg({'QSSTRESN': 'sum', 'SCOREMAX': 'sum'}).reset_index()
 grouped_sum['QSPERC'] = grouped_sum['QSSTRESN'] / grouped_sum['SCOREMAX']
