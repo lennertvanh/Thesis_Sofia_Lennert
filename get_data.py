@@ -1183,14 +1183,16 @@ else:
 # If someone has NA in the number of confirmed relapses, then set to 0
 merged_df['NRELAP'] = merged_df['NRELAP'].fillna(0)
 
+# Categorize the relapses into bins
+# We comment this code because we need the original variable to calculate correlations
+'''
 def bin_column(value):
     if value in [0, 1, 2, 3]:
         return str(value)
     else:
         return '4+'
-
 merged_df['NRELAP'] = merged_df['NRELAP'].apply(bin_column)
-
+'''
 
 ### EXPORT 
 folder_name = 'new_data'
