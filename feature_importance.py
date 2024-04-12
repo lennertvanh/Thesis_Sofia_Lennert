@@ -167,6 +167,7 @@ class Chain(BaseEstimator):
 
             # Apply cascading effect
             elif cascade == True: 
+                # for every a = for every target variable
                 for a in range(1, y_pred.shape[1] + 1):  
                     y_true_a = y_true.iloc[:, a-1]  
                     y_pred_a = y_pred.iloc[:, a-1]  
@@ -174,7 +175,7 @@ class Chain(BaseEstimator):
                     """
                     TO DO: make code more clean (checking type=object outside for loop for all predictors)
                     """
-                    # Calculate importance of each predictor 
+                    # Calculate importance of each predictor i
                     for i in range(v+a-1): 
                         Xext = data.iloc[:, :a+v-1].copy()  
                         last = Xext.iloc[:, -1]
@@ -192,16 +193,20 @@ class Chain(BaseEstimator):
                             yi_pred_num = pd.Categorical(last).codes
                             yi_pred_num = pd.Series(yi_pred_num)
                             Xext.iloc[:, -1] = yi_pred_num
-                        for m in range(max(-1, i-v), a):  
+                        for m in range(max(-1, i-v), a-1):  
+                            #print(m)
+                            print("a:", a)
+                            print("i:", i)
+                            print(Xext)
                             yi_pred = model_list[m+1].predict(Xext)
                             # Convert categorical to numerical encoding
                             if yi_pred.dtype == 'object':
                                 yi_pred_num = pd.Categorical(yi_pred).codes
                                 yi_pred_num = pd.Series(yi_pred_num)
-                                column_name = data.iloc[:, m+v+1].name
+                                column_name = data.iloc[:, m+v+2].name
                                 Xext[column_name] = yi_pred_num
                             else:
-                                column_name = data.iloc[:, m+v+1].name
+                                column_name = data.iloc[:, m+v+2].name
                                 Xext[column_name] = yi_pred
                             Xext_ori[column_name] =  yi_pred
                         yi_pred_shuffled = Xext_ori.iloc[:, -1]
