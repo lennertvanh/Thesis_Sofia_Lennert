@@ -147,17 +147,17 @@ class Chain(BaseEstimator):
                         # Remove rows with missing values in 
                         assert len(y_true_a) == len(yi_pred_shuffled)
                         missing_rows_mask = pd.Series(y_true_a).notna()  
-                        y_true = y_true_a[missing_rows_mask]
+                        y_test = y_true_a[missing_rows_mask]
                         y_pred_actual = y_pred_a[missing_rows_mask]
                         y_pred_shuffled_actual = yi_pred_shuffled[missing_rows_mask]
 
                         # Calculate evaluation metrics (R2 or accuracy)
-                        if y_true.dtype.kind in 'bifc':
-                            score1 = r2_score(y_true, y_pred_actual)
-                            score2 = r2_score(y_true, y_pred_shuffled_actual)
+                        if y_test.dtype.kind in 'bifc':
+                            score1 = r2_score(y_test, y_pred_actual)
+                            score2 = r2_score(y_test, y_pred_shuffled_actual)
                         else:
-                            score1 = accuracy_score(y_true, y_pred_actual)
-                            score2 = accuracy_score(y_true, y_pred_shuffled_actual) 
+                            score1 = accuracy_score(y_test, y_pred_actual)
+                            score2 = accuracy_score(y_test, y_pred_shuffled_actual) 
 
                         # Obtain permutation feature importance score for the input of model a
                         feat_imp_score_model.append(score1-score2)
@@ -208,17 +208,17 @@ class Chain(BaseEstimator):
 
                         assert len(y_true_a) == len(yi_pred_shuffled)
                         missing_rows_mask = pd.Series(y_true_a).notna()  
-                        y_true = y_true_a[missing_rows_mask]
+                        y_test = y_true_a[missing_rows_mask]
                         y_pred_actual = y_pred_a[missing_rows_mask]
                         y_pred_shuffled_actual = yi_pred_shuffled[missing_rows_mask]
 
                         # Calculate evaluation metrics (R2 or accuracy)
-                        if y_true.dtype.kind in 'bifc':
-                            score1 = r2_score(y_true, y_pred_actual)
-                            score2 = r2_score(y_true, y_pred_shuffled_actual)
+                        if y_test.dtype.kind in 'bifc':
+                            score1 = r2_score(y_test, y_pred_actual)
+                            score2 = r2_score(y_test, y_pred_shuffled_actual)
                         else:
-                            score1 = accuracy_score(y_true, y_pred_actual)
-                            score2 = accuracy_score(y_true, y_pred_shuffled_actual) 
+                            score1 = accuracy_score(y_test, y_pred_actual)
+                            score2 = accuracy_score(y_test, y_pred_shuffled_actual) 
 
                         # Obtain permutation feature importance score for the input of model a
                         feat_imp_score_model.append(score1-score2)

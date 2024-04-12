@@ -167,7 +167,7 @@ class Chain(BaseEstimator):
                 y_pred_shuffled_actual = yi_pred_shuffled[missing_rows_mask]
 
                 # Calculate evaluation metrics (R2 or accuracy)
-                if y_true.dtype.kind in 'bifc':
+                if y_test.dtype.kind in 'bifc':
                     score1 = r2_score(y_test, y_pred_actual)
                     score2 = r2_score(y_test, y_pred_shuffled_actual)
                 else:
