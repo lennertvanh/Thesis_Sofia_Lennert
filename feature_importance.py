@@ -96,7 +96,7 @@ class Chain(BaseEstimator):
 
 
 
-    def importances_target(self, X, y_true, y_pred, type="feat", cascade=False):
+    def importances_target(self, X, y_true, y_pred, type="feat", cascade=False, random_state=42):
 
         """Calculate the permutation importance
 
@@ -141,7 +141,7 @@ class Chain(BaseEstimator):
                             Xext.iloc[:, -1] = yi_pred_num
                         # For the input variables from X, don't use cascading effect
                         # Shuffle feature i in Xext + predict only model a
-                        Xext.iloc[:, i] = Xext.iloc[:, i].sample(frac=1).reset_index(drop=True)
+                        Xext.iloc[:, i] = Xext.iloc[:, i].sample(frac=1, random_state=random_state).reset_index(drop=True)
                         yi_pred_shuffled = model_list[a-1].predict(Xext)
                     
                         # Remove rows with missing values in 
@@ -185,7 +185,7 @@ class Chain(BaseEstimator):
                             yi_pred_num = pd.Series(yi_pred_num)
                             Xext.iloc[:, -1] = yi_pred_num 
                         # Shuffle
-                        Xext.iloc[:, i] = Xext.iloc[:, i].sample(frac=1).reset_index(drop=True)
+                        Xext.iloc[:, i] = Xext.iloc[:, i].sample(frac=1, random_state=random_state).reset_index(drop=True)
                         Xext_ori = Xext.copy()
                         last = Xext.iloc[:, -1]
                         # Convert categorical to numerical encoding
@@ -193,20 +193,20 @@ class Chain(BaseEstimator):
                             yi_pred_num = pd.Categorical(last).codes
                             yi_pred_num = pd.Series(yi_pred_num)
                             Xext.iloc[:, -1] = yi_pred_num
-                        for m in range(max(-1, i-v), a-1):  
-                            #print(m)
-                            print("a:", a)
-                            print("i:", i)
-                            print(Xext)
+                        if i < v:
+                            Xext = Xext.iloc[:,:v]
+                        else: 
+                            Xext = Xext.iloc[:,:i+1]
+                        for m in range(max(-1, i-v), a-1):                            
                             yi_pred = model_list[m+1].predict(Xext)
                             # Convert categorical to numerical encoding
                             if yi_pred.dtype == 'object':
                                 yi_pred_num = pd.Categorical(yi_pred).codes
                                 yi_pred_num = pd.Series(yi_pred_num)
-                                column_name = data.iloc[:, m+v+2].name
+                                column_name = data.iloc[:, m+v+1].name
                                 Xext[column_name] = yi_pred_num
                             else:
-                                column_name = data.iloc[:, m+v+2].name
+                                column_name = data.iloc[:, m+v+1].name
                                 Xext[column_name] = yi_pred
                             Xext_ori[column_name] =  yi_pred
                         yi_pred_shuffled = Xext_ori.iloc[:, -1]
@@ -224,6 +224,11 @@ class Chain(BaseEstimator):
                         else:
                             score1 = accuracy_score(y_test, y_pred_actual)
                             score2 = accuracy_score(y_test, y_pred_shuffled_actual) 
+
+                        #if score2 < 0:
+                        #    score2 = 0
+                        #print("y_pred:", score1)
+                        #print("y_pred_shuffled:", score2)
 
                         # Obtain permutation feature importance score for the input of model a
                         feat_imp_score_model.append(score1-score2)
