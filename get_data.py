@@ -625,6 +625,7 @@ unique_usubjid = opt['USUBJID'].unique()
 
 # Initialize an empty DataFrame with the unique USUBJID values
 final_merged_df = pd.DataFrame({'USUBJID': unique_usubjid})
+final_merged_df = final_merged_df.sort_values(by='USUBJID')
 
 # List of result DataFrames  # Excluse decimal score because not sure what it means
 result_dfs = [result_SLEC, result_SES, result_VAA]
@@ -1193,6 +1194,9 @@ def bin_column(value):
         return '4+'
 merged_df['NRELAP'] = merged_df['NRELAP'].apply(bin_column)
 '''
+
+# Sort by USUBJID 
+merged_df = merged_df.sort_values(by='USUBJID')
 
 ### EXPORT 
 folder_name = 'new_data'
