@@ -627,7 +627,7 @@ unique_usubjid = opt['USUBJID'].unique()
 final_merged_df = pd.DataFrame({'USUBJID': unique_usubjid})
 
 # List of result DataFrames
-result_dfs = [result_DC, result_SLEC, result_SES, result_VAA]
+result_dfs = [result_DC, result_SLEC, result_SES]
 
 # Iterate through result DataFrames and perform left merges
 for result_df in result_dfs:
