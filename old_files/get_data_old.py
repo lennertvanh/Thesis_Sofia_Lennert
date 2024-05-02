@@ -1151,6 +1151,7 @@ else:
 # If someone has NA in the number of confirmed relapses, then set to 0
 merged_df['NRELAP'] = merged_df['NRELAP'].fillna(0)
 
+'''
 def bin_column(value):
     if value in [0, 1, 2, 3]:
         return str(value)
@@ -1158,6 +1159,7 @@ def bin_column(value):
         return '4+'
 
 merged_df['NRELAP'] = merged_df['NRELAP'].apply(bin_column)
+'''
 
 
 ### EXPORT 
