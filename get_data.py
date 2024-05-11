@@ -628,7 +628,7 @@ final_merged_df = pd.DataFrame({'USUBJID': unique_usubjid})
 final_merged_df = final_merged_df.sort_values(by='USUBJID')
 
 # List of result DataFrames  # Excluse decimal score because not sure what it means
-result_dfs = [result_SLEC, result_SES, result_VAA]
+result_dfs = [result_SLEC, result_SES] #, result_VAA
 
 # Iterate through result DataFrames and perform left merges
 for result_df in result_dfs:
