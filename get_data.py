@@ -1,8 +1,16 @@
+### NOTE ###
+# It is necessary to insert a directory path in two places:
+# 1. possible_paths: insert directory of the MSOAC csv files 
+# 2. possible_paths2: insert directory where the new csv files after cleaning were saved 
+# (it is the path where you are currently + '/new_data')
+
+
 # Imports
 import pandas as pd
 import numpy as np
 import os
 
+# Insert here the path for the MSOAC Placebo csv files
 possible_paths = [
     'C:/Users/lenne/OneDrive/Documenten/Master of Statistics and Data Science/2023-2024/Master thesis/MSOAC Placebo Data',
     'C:/Users/anaso/Desktop/SOFIA MENDES/KU Leuven/Master Thesis/MSOAC Placebo dataset/csv files'
@@ -675,7 +683,7 @@ qs = qs.drop(columns=columns_to_drop)
 qs = qs.drop(columns=['STUDYID', 'DOMAIN']) #, 'QSTESTCD'
 qs.sort_values(by=['USUBJID', 'QSSEQ'], inplace=True)
 
-# BDI II #
+### BDI II ###
 BDI_rows = qs[qs['QSCAT'] == 'BDI-II']
 BDI_rows = BDI_rows.copy()
 BDI_rows.drop_duplicates(subset=['USUBJID', 'QSDY', 'QSTEST', 'QSSTRESN'], inplace=True)
@@ -691,19 +699,19 @@ BDI_rows = BDI_rows.loc[max_idx]
 
 result_table = BDI_rows.groupby(['USUBJID', 'QSDY']).size().reset_index(name='Count')
 
-# Step 1: Filter BDI_rows based on QSTEST
+# Filter BDI_rows based on QSTEST
 filtered_rows = BDI_rows[BDI_rows['QSTEST'] == 'BDI01-BDI Total Score'].copy()
 
-# Step 2: Merge with result_table to get the 'Count' for each unique combination of 'USUBJID' and 'QSDY'
+# Merge with result_table to get the 'Count' for each unique combination of 'USUBJID' and 'QSDY'
 merged_df = pd.merge(filtered_rows, result_table[['USUBJID', 'QSDY', 'Count']], on=['USUBJID', 'QSDY'], how='left')
 
-# Step 3: Calculate the new value for QSSTRESN
+# Calculate the new value for QSSTRESN
 merged_df['QSSTRESN'] = merged_df['QSSTRESN'] / (3 * (merged_df['Count'] - 1))
 
-# Step 4: Drop the 'Count' column 
+# Drop the 'Count' column 
 merged_df.drop(columns=['Count'], inplace=True)
 
-# Step 5: Merge the modified rows back into the original DataFrame
+# Merge the modified rows back into the original DataFrame
 BDI_rows = pd.merge(BDI_rows, merged_df[['USUBJID', 'QSDY', 'QSSTRESN']], on=['USUBJID', 'QSDY'], how='left')
 
 columns_to_drop = ['QSSEQ', 'QSSCAT', 'QSORRES', 'QSSTRESC', 'VISITNUM', 'QSEVLINT', 'QSSTRESN_x']
@@ -718,7 +726,7 @@ conditions = [
 # Define corresponding values for each condition
 values = ['BDI-before', 'BDI-after']
 
-# Create the new column "FT_PERIOD"
+# Create the new column "QS_PERIOD"
 BDI_rows['QS_PERIOD'] = np.select(conditions, values, default='NaN')
 BDI_rows = BDI_rows.dropna(subset=['QSDY']) #Drop observations for which we don't have time of test 
 
@@ -738,7 +746,7 @@ pivot_df.columns.name = None
 desired_order = ['USUBJID', 'BDI-before', 'BDI-after']
 result_BDI = pivot_df[desired_order]
 
-# EDSS #
+### EDSS ###
 EDSS_rows = qs[qs['QSCAT'] == 'EDSS']
 EDSS_df = EDSS_rows.copy()  # Create a copy to avoid the warning
 
@@ -770,7 +778,7 @@ result_EDSS = result_EDSS.drop_duplicates(subset=['USUBJID'])
 desired_order = ['USUBJID', 'EDSS-before', 'EDSS-2y', 'EDSS-after_2y']
 result_EDSS = result_EDSS[desired_order]
 
-# KFSS #
+### KFSS ###
 KFSS_qs = qs[qs['QSCAT'] == 'KFSS']
 KFSS_qs = KFSS_qs.drop(columns=['QSSEQ','VISITNUM','VISIT'])
 KFSS_qs = KFSS_qs.dropna(subset=['QSSTRESN'])
@@ -813,12 +821,11 @@ KFSS_qs_1 = KFSS_qs_1.copy()  # Create a copy to avoid the warning
 conditions = [
     (KFSS_qs_1['QSDY'] <= 1),
     ((KFSS_qs_1['QSDY'] > 1) & (KFSS_qs_1['QSDY'] <= 730)),
-    #((KFSS_qs['QSDY'] > 365) & (KFSS_qs['QSDY'] <= 730)),
-    ((KFSS_qs_1['QSDY'] > 730)) #& (KFSS_qs['QSDY'] <= 1095)),
-    #((KFSS_qs['QSDY'] > 1095) & (KFSS_qs['QSDY'] <= 1460)) 
+    ((KFSS_qs_1['QSDY'] > 730)) 
 ]
+
 # Define corresponding values for each condition
-values = ['before', '2y', 'after_2y'] # , '4y' - if i use this i have 93% missing in the time
+values = ['before', '2y', 'after_2y'] 
 
 # Create the new column "FT_PERIOD"
 KFSS_qs_1['QS_PERIOD'] = np.select(conditions, values, default='NaN')
@@ -885,10 +892,9 @@ KFSS_qs_2 = KFSS_qs_2.copy()  # Create a copy to avoid the warning
 conditions = [
     (KFSS_qs_2['QSDY'] <= 1),
     ((KFSS_qs_2['QSDY'] > 1) & (KFSS_qs_2['QSDY'] <= 730)),
-    #((KFSS_qs['QSDY'] > 365) & (KFSS_qs['QSDY'] <= 730)),
-    ((KFSS_qs_2['QSDY'] > 730)) #& (KFSS_qs['QSDY'] <= 1095)),
-    #((KFSS_qs['QSDY'] > 1095) & (KFSS_qs['QSDY'] <= 1460)) 
+    ((KFSS_qs_2['QSDY'] > 730)) 
 ]
+
 # Define corresponding values for each condition
 values = ['before', '2y', 'after_2y'] # , '4y' - if i use this i have 93% missing in the time
 
@@ -924,7 +930,7 @@ result_KFSS_2 = result_KFSS_2.drop_duplicates(subset=['USUBJID'])
 # Merge both
 result_KFSS = pd.merge(result_KFSS_1, result_KFSS_2, on='USUBJID', how='inner')
 
-# RAND36 #
+### RAND36 ###
 RAND36_qs = qs[qs['QSCAT'] == 'RAND-36 V1.0']
 RAND36_qs = RAND36_qs.drop(columns=['QSSEQ','QSSTRESC','VISITNUM','VISIT'])
 
@@ -939,6 +945,7 @@ def assign_value(row):
         return 'PHYSICAL'
     else:
         return 'MENTAL'
+    
 # Apply the function row-wise to assign values to desired column 
 RAND36_qs['QSNEWCAT'] = RAND36_qs.apply(assign_value, axis=1)
 
@@ -951,6 +958,7 @@ def set_scoremax(row):
         return 6
     else:
         return 5
+    
 # Apply the function row-wise to set the values in column B
 RAND36_qs['SCOREMAX'] = RAND36_qs.apply(set_scoremax, axis=1)
 
@@ -1009,7 +1017,7 @@ result_RAND36 = result_RAND36.drop_duplicates(subset=['USUBJID'])
 desired_order = ['USUBJID', 'RAND36_M-before', 'RAND36_M-after', 'RAND36_P-before', 'RAND36_P-after']
 result_RAND36 = result_RAND36[desired_order]
 
-# SF12 #
+### SF12 ###
 SF_rows = qs[qs['QSCAT'] == 'SF-12 V2']
 
 # Apply the function to the column
@@ -1097,6 +1105,7 @@ questionnaires_aggregated = pd.merge(questionnaires_aggregated, result_SF, on='U
 ### DELETE THIS PART IN THE CODE IF YOU WANT THE RAND36 AND SF12 SEPARATELY
     ### BECAUSE THEY ARE DISJOINT, WE MERGE THEM INTO ONE COLUMN (since both are percentages)
     ### NOTE: for the binary indicator we can only keep one (before and after - because this will be the same)
+
 # Create a new column 'RAND36_M-before' and fill it with values from 'SF12_M-before'
 questionnaires_aggregated['M_R36-SF12-before'] = questionnaires_aggregated['RAND36_M-before'].fillna(questionnaires_aggregated['SF12_M-before'])
 # Create a new column 'RAND36_P-before' and fill it with values from 'SF12_P-before'
@@ -1114,6 +1123,7 @@ questionnaires_aggregated['P_R36-SF12-after'] = questionnaires_aggregated['RAND3
 questionnaires_aggregated['R36-SF12-after_Ind'] = questionnaires_aggregated.apply(lambda row: 1 if pd.notna(row['RAND36_M-after']) else (0 if pd.notna(row['SF12_M-after']) else np.nan), axis=1)
 # Drop the original columns if needed
 questionnaires_aggregated = questionnaires_aggregated.drop(['SF12_P-after','SF12_M-after','RAND36_P-after','RAND36_M-after'], axis=1)
+
 ##################################################################################################################
 
 folder_name = 'new_data'
@@ -1135,8 +1145,8 @@ print("QS_agg.csv has been created in the folder new_data")
 ################# Merge Data ##################
 ###############################################
 
-# Define possible paths where CSV files might be located
-possible_paths = [
+# This is the path where the new files were stored after cleaning 
+possible_paths2 = [
     'C:/Users/lenne/OneDrive/Documenten/Master of Statistics and Data Science/2023-2024/Master thesis/Thesis_Sofia_Lennert/new_data',
     'C:/Users/anaso/Desktop/SOFIA MENDES/KU Leuven/Master Thesis/Thesis_Sofia_Lennert/new_data'
 ]
@@ -1151,13 +1161,13 @@ file6 = 'OE_agg.csv'
 file7 = 'QS_agg.csv'
 
 # Find full paths to the CSV files
-path1 = next((f'{path}/{file1}' for path in possible_paths if os.path.exists(f'{path}/{file1}')), None)
-path2 = next((f'{path}/{file2}' for path in possible_paths if os.path.exists(f'{path}/{file2}')), None)
-path3 = next((f'{path}/{file3}' for path in possible_paths if os.path.exists(f'{path}/{file3}')), None)
-path4 = next((f'{path}/{file4}' for path in possible_paths if os.path.exists(f'{path}/{file4}')), None)
-path5 = next((f'{path}/{file5}' for path in possible_paths if os.path.exists(f'{path}/{file5}')), None)
-path6 = next((f'{path}/{file6}' for path in possible_paths if os.path.exists(f'{path}/{file6}')), None)
-path7 = next((f'{path}/{file7}' for path in possible_paths if os.path.exists(f'{path}/{file7}')), None)
+path1 = next((f'{path}/{file1}' for path in possible_paths2 if os.path.exists(f'{path}/{file1}')), None)
+path2 = next((f'{path}/{file2}' for path in possible_paths2 if os.path.exists(f'{path}/{file2}')), None)
+path3 = next((f'{path}/{file3}' for path in possible_paths2 if os.path.exists(f'{path}/{file3}')), None)
+path4 = next((f'{path}/{file4}' for path in possible_paths2 if os.path.exists(f'{path}/{file4}')), None)
+path5 = next((f'{path}/{file5}' for path in possible_paths2 if os.path.exists(f'{path}/{file5}')), None)
+path6 = next((f'{path}/{file6}' for path in possible_paths2 if os.path.exists(f'{path}/{file6}')), None)
+path7 = next((f'{path}/{file7}' for path in possible_paths2 if os.path.exists(f'{path}/{file7}')), None)
 
 # Check if paths are found
 if None in [path1, path2, path3, path4, path5, path6, path7]: 
