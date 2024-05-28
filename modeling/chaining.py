@@ -143,7 +143,6 @@ class Chain(BaseEstimator):
         if type == "feat":
             for j in range(len(y_pred.columns)):
                 score = model_list[j].feature_importances_
-                #score = pd.Series(score, index=list(X.columns)+list(y_pred.columns[:j+1])[:-1])
                 feat_imp_score.append(score)
 
         elif type == "perm":
@@ -252,11 +251,6 @@ class Chain(BaseEstimator):
                         else:
                             score1 = accuracy_score(y_test, y_pred_actual)
                             score2 = accuracy_score(y_test, y_pred_shuffled_actual) 
-
-                        #if score2 < 0:
-                        #    score2 = 0
-                        #print("y_pred:", score1)
-                        #print("y_pred_shuffled:", score2)
 
                         # Obtain permutation feature importance score for the input of model a
                         feat_imp_score_model.append(score1-score2)
