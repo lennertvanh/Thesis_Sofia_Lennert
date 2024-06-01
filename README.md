@@ -9,7 +9,7 @@ This repository contains the code used for a Master Thesis about "Multi-task tre
 
 For our research, we are utilizing the Multiple Sclerosis Outcome Assessments Consortium (MSOAC) Placebo Database, provided by the Critical Path Institute. This database compiles placebo arm data from clinical trial datasets, contributed by industry members of MSOAC. It includes 2465 individual patient records from 9 clinical trials and contains 12 CSV files with information on demographics (such as age, gender, country, and race), confirmed and unconfirmed relapses, medical history (including MS diagnosis), functional tests (such as T25FW, NHPT, PASAT, and SDMT), visual acuity, concomitant medications, pregnancy tests, subject’s dominant hand and questionnaires (including EDSS, KFSS, RAND-36, SF-12, and BDI-II). 
 
-Access to the MSOAC Placebo data is granted to qualified researchers upon submission and approval of a request via this link: https://codr.cpath.org/main/acceptTerms.html.
+Access to the MSOAC Placebo data is granted to qualified researchers upon submission and approval of a request via this link (after selecting Multiple Sclerosis Placebo Data): https://codr.c-path.org/main/applyDatabaseSelection.html.
 
 
 ## Installation
